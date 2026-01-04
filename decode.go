@@ -144,13 +144,23 @@ func parseDateTime(b []byte) (time.Time, error) {
 		return time.Time{}, unstable.NewParserError(b, "extra bytes at the end of the timezone")
 	}
 
+	// Normalize leap seconds (second=60) to second=59 to prevent overflow
+	// when Go's time.Date normalizes the time. This is necessary because
+	// time.Date(9999, 12, 31, 23, 59, 60, 0, UTC) normalizes to year 10000,
+	// which is outside the valid TOML date range (0000-9999).
+	// See: https://github.com/pelletier/go-toml/issues/1015
+	second := dt.Second
+	if second == 60 {
+		second = 59
+	}
+
 	t := time.Date(
 		dt.Year,
 		time.Month(dt.Month),
 		dt.Day,
 		dt.Hour,
 		dt.Minute,
-		dt.Second,
+		second,
 		dt.Nanosecond,
 		zone)
 

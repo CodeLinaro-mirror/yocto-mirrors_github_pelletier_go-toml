@@ -4242,3 +4242,66 @@ func TestIssue995_SliceNonEmpty_UsesLastElement(t *testing.T) {
 		t.Fatalf("unexpected values in allowlists: %v", got)
 	}
 }
+
+// TestLeapSecondRoundTrip tests that leap seconds (second=60) don't cause
+// year overflow issues during round-trip marshaling. This reproduces OSS-Fuzz
+// issue 472183443.
+func TestLeapSecondRoundTrip(t *testing.T) {
+	// This is the test case from OSS-Fuzz issue #1015
+	input := []byte("s=9999-12-31 23:59:60z")
+
+	var v interface{}
+	err := toml.Unmarshal(input, &v)
+	assert.NoError(t, err)
+
+	// Marshal back to TOML
+	encoded, err := toml.Marshal(v)
+	assert.NoError(t, err)
+
+	// Unmarshal again - this should not fail with year overflow
+	var v2 interface{}
+	err = toml.Unmarshal(encoded, &v2)
+	assert.NoError(t, err)
+}
+
+// TestLeapSecondVariants tests various leap second edge cases
+func TestLeapSecondVariants(t *testing.T) {
+	testCases := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "leap second with UTC offset datetime",
+			input: "s=9999-12-31 23:59:60z",
+		},
+		{
+			name:  "leap second with positive offset",
+			input: "s=9999-12-31 23:59:60+00:00",
+		},
+		{
+			name:  "leap second with negative offset",
+			input: "s=9999-12-31 23:59:60-05:00",
+		},
+		{
+			name:  "leap second earlier in year",
+			input: "s=2015-06-30 23:59:60z",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var v interface{}
+			err := toml.Unmarshal([]byte(tc.input), &v)
+			assert.NoError(t, err)
+
+			// Marshal back to TOML
+			encoded, err := toml.Marshal(v)
+			assert.NoError(t, err)
+
+			// Unmarshal again - this should not fail
+			var v2 interface{}
+			err = toml.Unmarshal(encoded, &v2)
+			assert.NoError(t, err)
+		})
+	}
+}

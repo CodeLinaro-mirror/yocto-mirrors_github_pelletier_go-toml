@@ -94,7 +94,13 @@ type LocalDateTime struct {
 
 // AsTime converts d into a specific time instance in zone.
 func (d LocalDateTime) AsTime(zone *time.Location) time.Time {
-	return time.Date(d.Year, time.Month(d.Month), d.Day, d.Hour, d.Minute, d.Second, d.Nanosecond, zone)
+	// Normalize leap seconds (second=60) to second=59 to prevent overflow
+	// when Go's time.Date normalizes the time.
+	second := d.Second
+	if second == 60 {
+		second = 59
+	}
+	return time.Date(d.Year, time.Month(d.Month), d.Day, d.Hour, d.Minute, second, d.Nanosecond, zone)
 }
 
 // String returns RFC 3339 representation of d.
