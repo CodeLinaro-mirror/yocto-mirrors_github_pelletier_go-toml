@@ -4385,3 +4385,294 @@ func TestIssue1028(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+// Tests for issue #873 - Bring back toml.Unmarshaler for tables and arrays
+
+type customTable873 struct {
+	Keys   []string
+	Values map[string]string
+}
+
+func (c *customTable873) UnmarshalTOML(node *unstable.Node) error {
+	c.Keys = []string{}
+	c.Values = make(map[string]string)
+
+	it := node.Children()
+	for it.Next() {
+		kv := it.Node()
+		if kv.Kind != unstable.KeyValue {
+			continue
+		}
+		// Get the key
+		keyIt := kv.Key()
+		if keyIt.Next() {
+			keyNode := keyIt.Node()
+			key := string(keyNode.Data)
+			c.Keys = append(c.Keys, key)
+
+			// Get the value
+			valueNode := kv.Value()
+			if valueNode != nil && valueNode.Kind == unstable.String {
+				c.Values[key] = string(valueNode.Data)
+			}
+		}
+	}
+	return nil
+}
+
+func TestIssue873_TableUnmarshaler(t *testing.T) {
+	type Config struct {
+		Section customTable873 `toml:"section"`
+	}
+
+	doc := `
+[section]
+key1 = "value1"
+key2 = "value2"
+key3 = "value3"
+`
+
+	var cfg Config
+	err := toml.NewDecoder(bytes.NewReader([]byte(doc))).
+		EnableUnmarshalerInterface().
+		Decode(&cfg)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"key1", "key2", "key3"}, cfg.Section.Keys)
+	assert.Equal(t, "value1", cfg.Section.Values["key1"])
+	assert.Equal(t, "value2", cfg.Section.Values["key2"])
+	assert.Equal(t, "value3", cfg.Section.Values["key3"])
+}
+
+func TestIssue873_TableUnmarshaler_EmptyTable(t *testing.T) {
+	type Config struct {
+		Section customTable873 `toml:"section"`
+	}
+
+	doc := `
+[section]
+`
+
+	var cfg Config
+	err := toml.NewDecoder(bytes.NewReader([]byte(doc))).
+		EnableUnmarshalerInterface().
+		Decode(&cfg)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{}, cfg.Section.Keys)
+}
+
+func TestIssue873_ArrayTableUnmarshaler(t *testing.T) {
+	type Config struct {
+		Items []customTable873 `toml:"items"`
+	}
+
+	doc := `
+[[items]]
+name = "first"
+id = "1"
+
+[[items]]
+name = "second"
+id = "2"
+`
+
+	var cfg Config
+	err := toml.NewDecoder(bytes.NewReader([]byte(doc))).
+		EnableUnmarshalerInterface().
+		Decode(&cfg)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(cfg.Items))
+	assert.Equal(t, []string{"name", "id"}, cfg.Items[0].Keys)
+	assert.Equal(t, "first", cfg.Items[0].Values["name"])
+	assert.Equal(t, "1", cfg.Items[0].Values["id"])
+	assert.Equal(t, []string{"name", "id"}, cfg.Items[1].Keys)
+	assert.Equal(t, "second", cfg.Items[1].Values["name"])
+	assert.Equal(t, "2", cfg.Items[1].Values["id"])
+}
+
+func TestIssue873_NestedTableUnmarshaler(t *testing.T) {
+	type Config struct {
+		Outer struct {
+			Inner customTable873 `toml:"inner"`
+		} `toml:"outer"`
+	}
+
+	doc := `
+[outer.inner]
+a = "A"
+b = "B"
+`
+
+	var cfg Config
+	err := toml.NewDecoder(bytes.NewReader([]byte(doc))).
+		EnableUnmarshalerInterface().
+		Decode(&cfg)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"a", "b"}, cfg.Outer.Inner.Keys)
+	assert.Equal(t, "A", cfg.Outer.Inner.Values["a"])
+	assert.Equal(t, "B", cfg.Outer.Inner.Values["b"])
+}
+
+func TestIssue873_TableUnmarshaler_MultipleTables(t *testing.T) {
+	type Config struct {
+		First  customTable873 `toml:"first"`
+		Second customTable873 `toml:"second"`
+	}
+
+	doc := `
+[first]
+key1 = "value1"
+
+[second]
+key2 = "value2"
+`
+
+	var cfg Config
+	err := toml.NewDecoder(bytes.NewReader([]byte(doc))).
+		EnableUnmarshalerInterface().
+		Decode(&cfg)
+
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"key1"}, cfg.First.Keys)
+	assert.Equal(t, "value1", cfg.First.Values["key1"])
+	assert.Equal(t, []string{"key2"}, cfg.Second.Keys)
+	assert.Equal(t, "value2", cfg.Second.Values["key2"])
+}
+
+// Test that regular struct fields still work alongside Unmarshaler tables
+func TestIssue873_MixedWithRegularFields(t *testing.T) {
+	type Config struct {
+		Name    string         `toml:"name"`
+		Section customTable873 `toml:"section"`
+		Count   int            `toml:"count"`
+	}
+
+	doc := `
+name = "test"
+count = 42
+
+[section]
+foo = "bar"
+`
+
+	var cfg Config
+	err := toml.NewDecoder(bytes.NewReader([]byte(doc))).
+		EnableUnmarshalerInterface().
+		Decode(&cfg)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "test", cfg.Name)
+	assert.Equal(t, 42, cfg.Count)
+	assert.Equal(t, []string{"foo"}, cfg.Section.Keys)
+	assert.Equal(t, "bar", cfg.Section.Values["foo"])
+}
+
+// Test that pointer to Unmarshaler type works
+func TestIssue873_PointerToUnmarshaler(t *testing.T) {
+	type Config struct {
+		Section *customTable873 `toml:"section"`
+	}
+
+	doc := `
+[section]
+hello = "world"
+`
+
+	var cfg Config
+	err := toml.NewDecoder(bytes.NewReader([]byte(doc))).
+		EnableUnmarshalerInterface().
+		Decode(&cfg)
+
+	assert.NoError(t, err)
+	assert.True(t, cfg.Section != nil)
+	assert.Equal(t, []string{"hello"}, cfg.Section.Keys)
+	assert.Equal(t, "world", cfg.Section.Values["hello"])
+}
+
+// Test table with sub-tables defined separately
+func TestIssue873_TableWithSubTables(t *testing.T) {
+	type Config struct {
+		Parent customTable873 `toml:"parent"`
+	}
+
+	doc := `
+[parent]
+name = "root"
+
+[parent.child]
+name = "nested"
+`
+
+	var cfg Config
+	err := toml.NewDecoder(bytes.NewReader([]byte(doc))).
+		EnableUnmarshalerInterface().
+		Decode(&cfg)
+
+	// The parent should only get the keys directly under [parent],
+	// not the [parent.child] sub-table
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"name"}, cfg.Parent.Keys)
+	assert.Equal(t, "root", cfg.Parent.Values["name"])
+}
+
+// Test for issue #994 follow-up - tables defined piece-wise
+// This addresses the maintainer's comment: "It doesn't deal with tables defined piece-wise yet"
+func TestIssue994_TablesPieceWise(t *testing.T) {
+	// Test with piece-wise table definition (using [table] syntax)
+	// The customTable873 type captures key-value pairs in order,
+	// which is useful for use cases like maintaining map ordering
+	doc := `
+[section]
+first = "1"
+second = "2"
+third = "3"
+`
+
+	type Config struct {
+		Section customTable873 `toml:"section"`
+	}
+
+	var cfg Config
+	err := toml.NewDecoder(bytes.NewReader([]byte(doc))).
+		EnableUnmarshalerInterface().
+		Decode(&cfg)
+
+	assert.NoError(t, err)
+	// Verify ordering is preserved (keys are collected in document order)
+	assert.Equal(t, []string{"first", "second", "third"}, cfg.Section.Keys)
+	assert.Equal(t, "1", cfg.Section.Values["first"])
+	assert.Equal(t, "2", cfg.Section.Values["second"])
+	assert.Equal(t, "3", cfg.Section.Values["third"])
+}
+
+// Test root-level struct with tables - combines #994 fix with #873 enhancement
+func TestIssue994_RootWithTables(t *testing.T) {
+	type rootDoc struct {
+		Tables []customTable873 `toml:"tables"`
+	}
+
+	doc := `
+[[tables]]
+name = "first"
+value = "one"
+
+[[tables]]
+name = "second"
+value = "two"
+`
+
+	var d rootDoc
+	err := toml.NewDecoder(bytes.NewReader([]byte(doc))).
+		EnableUnmarshalerInterface().
+		Decode(&d)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(d.Tables))
+	assert.Equal(t, "first", d.Tables[0].Values["name"])
+	assert.Equal(t, "one", d.Tables[0].Values["value"])
+	assert.Equal(t, "second", d.Tables[1].Values["name"])
+	assert.Equal(t, "two", d.Tables[1].Values["value"])
+}
