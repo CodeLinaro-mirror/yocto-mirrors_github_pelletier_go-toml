@@ -864,7 +864,7 @@ huey = 'dewey'
 			},
 		},
 		{
-			desc: "multiline basic string escape character",
+			desc:  "multiline basic string escape character",
 			input: `A = """\e"""`,
 			gen: func() test {
 				type doc struct {
@@ -934,7 +934,7 @@ huey = 'dewey'
 			},
 		},
 		{
-			desc: "multiline basic string hex escape",
+			desc:  "multiline basic string hex escape",
 			input: `A = """\x61"""`,
 			gen: func() test {
 				type doc struct {
@@ -3727,6 +3727,30 @@ world'`,
 			desc: `backspace in comment`,
 			data: "# this is a test\ba=1",
 		},
+		{
+			desc: `inline table comma at start`,
+			data: `a = { , b = 1 }`,
+		},
+		{
+			desc: `inline table missing separator`,
+			data: `a = { b = 1 c = 2 }`,
+		},
+		{
+			desc: `inline table double comma across newline`,
+			data: "a = { b = 1,\n, c = 2 }",
+		},
+		{
+			desc: `incomplete inline table`,
+			data: "a = { b = 1,\n",
+		},
+		{
+			desc: `incomplete hex escape in multiline basic string`,
+			data: `A = """\x6"""`,
+		},
+		{
+			desc: `invalid escape char in basic string`,
+			data: `A = "\z"`,
+		},
 	}
 
 	for _, e := range examples {
@@ -4665,4 +4689,177 @@ func TestIssue1028(t *testing.T) {
 		err := toml.Unmarshal([]byte(`items = 10:20:30`), &c)
 		assert.Error(t, err)
 	})
+}
+
+// customFieldUnmarshaler implements unstable.Unmarshaler and captures all
+// key-value pairs directed to it, including unknown fields.
+type customFieldUnmarshaler struct {
+	Values map[string]string
+}
+
+func (c *customFieldUnmarshaler) UnmarshalTOML(value *unstable.Node) error {
+	c.Values = map[string]string{
+		"kind": value.Kind.String(),
+		"data": string(value.Data),
+	}
+	return nil
+}
+
+func TestUnmarshalerInterface_StructFieldFallback(t *testing.T) {
+	// When EnableUnmarshalerInterface is active and a struct field is not found,
+	// the decoder should fall back to the Unmarshaler interface on the struct.
+	type Config struct {
+		Name string `toml:"name"`
+	}
+
+	t.Run("unknown field with unmarshaler", func(t *testing.T) {
+		doc := `name = "hello"
+unknown = "world"`
+		var cfg Config
+		decoder := toml.NewDecoder(bytes.NewReader([]byte(doc)))
+		decoder.EnableUnmarshalerInterface()
+		err := decoder.Decode(&cfg)
+		assert.NoError(t, err)
+		assert.Equal(t, "hello", cfg.Name)
+	})
+}
+
+func TestUnmarshalerInterface_Value(t *testing.T) {
+	// Test that EnableUnmarshalerInterface delegates value decoding
+	// to the UnmarshalTOML method.
+	type Config struct {
+		Field customFieldUnmarshaler `toml:"field"`
+	}
+
+	doc := `field = "test-value"`
+	var cfg Config
+	decoder := toml.NewDecoder(bytes.NewReader([]byte(doc)))
+	decoder.EnableUnmarshalerInterface()
+	err := decoder.Decode(&cfg)
+	assert.NoError(t, err)
+	assert.Equal(t, "test-value", cfg.Field.Values["data"])
+}
+
+func TestTypeMismatchString_StructFieldContext(t *testing.T) {
+	// Exercise the typeMismatchString code path that includes struct field info
+	// in the error message.
+	type Inner struct {
+		Value int `toml:"value"`
+	}
+	type Config struct {
+		Inner Inner `toml:"inner"`
+	}
+
+	doc := `inner = "not-a-table"`
+	var cfg Config
+	err := toml.Unmarshal([]byte(doc), &cfg)
+	assert.Error(t, err)
+}
+
+func TestUnmarshalInlineTable_IncompatibleType(t *testing.T) {
+	// Exercise the default branch of unmarshalInlineTable when the target
+	// is not a map, struct, or interface.
+	type doc struct {
+		A int `toml:"a"`
+	}
+	var v doc
+	err := toml.Unmarshal([]byte(`a = {b = 1}`), &v)
+	assert.Error(t, err)
+}
+
+func TestTypeMismatchString_NoStructContext(t *testing.T) {
+	// Exercise the typeMismatchString code path without struct field context (line 186).
+	// Decoding a string into a bare int triggers this path.
+	var v map[string]int
+	err := toml.Unmarshal([]byte(`a = "hello"`), &v)
+	assert.Error(t, err)
+}
+
+func TestMultilineInlineTable_EmptyWithNewlines(t *testing.T) {
+	doc := "a = {\n\n}"
+	var v map[string]interface{}
+	err := toml.Unmarshal([]byte(doc), &v)
+	assert.NoError(t, err)
+	inner := v["a"]
+	if inner == nil {
+		t.Fatal("expected key 'a' to be present")
+	}
+	m, ok := inner.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected map, got %T", inner)
+	}
+	if len(m) != 0 {
+		t.Fatalf("expected empty map, got %v", m)
+	}
+}
+
+func TestMultilineInlineTable_CommentsOnly(t *testing.T) {
+	doc := "a = {\n  # just a comment\n}"
+	var v map[string]interface{}
+	err := toml.Unmarshal([]byte(doc), &v)
+	assert.NoError(t, err)
+	inner := v["a"]
+	if inner == nil {
+		t.Fatal("expected key 'a' to be present")
+	}
+	m, ok := inner.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected map, got %T", inner)
+	}
+	if len(m) != 0 {
+		t.Fatalf("expected empty map, got %v", m)
+	}
+}
+
+func TestMultilineInlineTable_CommentAfterComma(t *testing.T) {
+	// Exercises comment handling after comma in inline table (parser lines 518-524).
+	doc := "a = { b = 1, # comment\nc = 2 }"
+	var v map[string]interface{}
+	err := toml.Unmarshal([]byte(doc), &v)
+	assert.NoError(t, err)
+	m, ok := v["a"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected a map")
+	}
+	if m["b"] != int64(1) {
+		t.Fatalf("expected b=1, got %v", m["b"])
+	}
+	if m["c"] != int64(2) {
+		t.Fatalf("expected c=2, got %v", m["c"])
+	}
+}
+
+func TestMultilineInlineTable_CommentAfterValue(t *testing.T) {
+	// Exercises comment handling after keyval in inline table (parser lines 542-548).
+	doc := "a = { b = 1 # comment\n, c = 2 }"
+	var v map[string]interface{}
+	err := toml.Unmarshal([]byte(doc), &v)
+	assert.NoError(t, err)
+	m, ok := v["a"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected a map")
+	}
+	if m["b"] != int64(1) {
+		t.Fatalf("expected b=1, got %v", m["b"])
+	}
+	if m["c"] != int64(2) {
+		t.Fatalf("expected c=2, got %v", m["c"])
+	}
+}
+
+func TestMultilineInlineTable_LeadingComma(t *testing.T) {
+	doc := "a = { b = 1\n, c = 2 }"
+	var v map[string]interface{}
+	err := toml.Unmarshal([]byte(doc), &v)
+	assert.NoError(t, err)
+	m, ok := v["a"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected a map")
+	}
+	if m["b"] != int64(1) {
+		t.Fatalf("expected b=1, got %v", m["b"])
+	}
+	if m["c"] != int64(2) {
+		t.Fatalf("expected c=2, got %v", m["c"])
+	}
 }

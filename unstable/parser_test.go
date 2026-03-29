@@ -498,6 +498,44 @@ func TestParser_AST(t *testing.T) {
 	}
 }
 
+func TestParseInlineTable_CommentsWithKeepComments(t *testing.T) {
+	// Exercise comment reference handling inside parseInlineTable when
+	// KeepComments is true. This covers the addChild(cref) branches
+	// at the start of the loop, after comma, and after keyval.
+	examples := []struct {
+		desc  string
+		input string
+	}{
+		{
+			desc:  "comment at start of inline table",
+			input: "a = {\n# comment\nb = 1\n}",
+		},
+		{
+			desc:  "comment after comma",
+			input: "a = {b = 1,\n# comment\nc = 2\n}",
+		},
+		{
+			desc:  "comment after keyval",
+			input: "a = {b = 1 # comment\n, c = 2}",
+		},
+		{
+			desc:  "comment only in inline table",
+			input: "a = {\n# just a comment\n}",
+		},
+	}
+
+	for _, e := range examples {
+		e := e
+		t.Run(e.desc, func(t *testing.T) {
+			p := Parser{KeepComments: true}
+			p.Reset([]byte(e.input))
+			p.NextExpression()
+			err := p.Error()
+			assert.NoError(t, err)
+		})
+	}
+}
+
 func BenchmarkParseBasicStringWithUnicode(b *testing.B) {
 	p := &Parser{}
 	b.Run("4", func(b *testing.B) {
