@@ -69,8 +69,8 @@ func (p *Parser) Data() []byte {
 // panics.
 func (p *Parser) Range(b []byte) Range {
 	return Range{
-		Offset: uint32(p.subsliceOffset(b)), //nolint:gosec // TOML documents are small
-		Length: uint32(len(b)),              //nolint:gosec // TOML documents are small
+		Offset: uint32(SubsliceOffset(p.data, b)), //nolint:gosec // TOML documents are small
+		Length: uint32(len(b)),                    //nolint:gosec // TOML documents are small
 	}
 }
 
@@ -80,20 +80,6 @@ func (p *Parser) Range(b []byte) Range {
 func (p *Parser) rangeOfToken(token, rest []byte) Range {
 	offset := len(p.data) - len(token) - len(rest)
 	return Range{Offset: uint32(offset), Length: uint32(len(token))} //nolint:gosec // TOML documents are small
-}
-
-// subsliceOffset finds the byte offset of subslice b within p.data
-// by scanning for the matching element address.
-func (p *Parser) subsliceOffset(b []byte) int {
-	if len(b) == 0 {
-		return len(p.data)
-	}
-	for i := range p.data {
-		if &p.data[i] == &b[0] {
-			return i
-		}
-	}
-	panic("subslice is not within parser data")
 }
 
 // Raw returns the slice corresponding to the bytes in the given range.
