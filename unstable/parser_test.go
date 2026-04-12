@@ -1,6 +1,7 @@
 package unstable
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -671,6 +672,98 @@ key3 = "value3"
 
 	assert.NoError(t, p.Error())
 	assert.Equal(t, []string{"key1", "key2", "key3"}, keys)
+}
+
+func TestRangeOffsetAfterComment(t *testing.T) {
+	input := []byte("# comment\n= \"value\"")
+
+	p := Parser{}
+	p.Reset(input)
+	for p.NextExpression() {
+	}
+	err := p.Error()
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	var perr *ParserError
+	if !errors.As(err, &perr) {
+		t.Fatalf("expected ParserError, got %T", err)
+	}
+	r := p.Range(perr.Highlight)
+	shape := p.Shape(r)
+
+	if r.Offset != 10 {
+		t.Errorf("Range offset: got %d, want 10", r.Offset)
+	}
+	if shape.Start.Line != 2 || shape.Start.Column != 1 {
+		t.Errorf("position: got %d:%d, want 2:1", shape.Start.Line, shape.Start.Column)
+	}
+}
+
+func TestErrorHighlightPositions(t *testing.T) {
+	examples := []struct {
+		desc       string
+		input      string
+		wantLine   int
+		wantColumn int
+	}{
+		{
+			desc:       "invalid key start after comment",
+			input:      "# comment\n= \"value\"",
+			wantLine:   2,
+			wantColumn: 1,
+		},
+		{
+			desc:       "invalid key start on first line",
+			input:      "= \"value\"",
+			wantLine:   1,
+			wantColumn: 1,
+		},
+		{
+			desc:       "invalid key after multiple comments",
+			input:      "# comment 1\n# comment 2\n= \"value\"",
+			wantLine:   3,
+			wantColumn: 1,
+		},
+		{
+			desc:       "invalid key after valid key-value",
+			input:      "a = 1\n= \"value\"",
+			wantLine:   2,
+			wantColumn: 1,
+		},
+		{
+			desc:       "invalid key after whitespace on line",
+			input:      "a = 1\n  = \"value\"",
+			wantLine:   2,
+			wantColumn: 3,
+		},
+	}
+
+	for _, e := range examples {
+		t.Run(e.desc, func(t *testing.T) {
+			p := Parser{}
+			p.Reset([]byte(e.input))
+			for p.NextExpression() {
+			}
+			err := p.Error()
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			var perr *ParserError
+			if !errors.As(err, &perr) {
+				t.Fatalf("expected ParserError, got %T", err)
+			}
+			r := p.Range(perr.Highlight)
+			shape := p.Shape(r)
+
+			if shape.Start.Line != e.wantLine {
+				t.Errorf("line: got %d, want %d", shape.Start.Line, e.wantLine)
+			}
+			if shape.Start.Column != e.wantColumn {
+				t.Errorf("column: got %d, want %d", shape.Start.Column, e.wantColumn)
+			}
+		})
+	}
 }
 
 func ExampleParser() {

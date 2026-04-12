@@ -286,6 +286,100 @@ func TestDecodeError_Position(t *testing.T) {
 	}
 }
 
+func TestDecodeError_PositionAfterComments(t *testing.T) {
+	examples := []struct {
+		name        string
+		doc         string
+		expectedRow int
+		expectedCol int
+		errContains string
+	}{
+		{
+			name:        "invalid key after comment",
+			doc:         "# comment\n= \"value\"",
+			expectedRow: 2,
+			expectedCol: 1,
+			errContains: "invalid character at start of key",
+		},
+		{
+			name:        "invalid key after multiple comments",
+			doc:         "# line 1\n# line 2\n= \"value\"",
+			expectedRow: 3,
+			expectedCol: 1,
+			errContains: "invalid character at start of key",
+		},
+		{
+			name:        "invalid key after valid assignment and comment",
+			doc:         "a = 1\n# comment\n= \"value\"",
+			expectedRow: 3,
+			expectedCol: 1,
+			errContains: "invalid character at start of key",
+		},
+		{
+			name:        "invalid key on first line",
+			doc:         "= \"value\"",
+			expectedRow: 1,
+			expectedCol: 1,
+			errContains: "invalid character at start of key",
+		},
+		{
+			name:        "invalid key with leading whitespace",
+			doc:         "# comment\n  = \"value\"",
+			expectedRow: 2,
+			expectedCol: 3,
+			errContains: "invalid character at start of key",
+		},
+	}
+
+	for _, e := range examples {
+		t.Run(e.name, func(t *testing.T) {
+			var v map[string]interface{}
+			err := Unmarshal([]byte(e.doc), &v)
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+
+			var derr *DecodeError
+			if !errors.As(err, &derr) {
+				t.Fatalf("expected DecodeError, got %T: %v", err, err)
+			}
+
+			row, col := derr.Position()
+			if row != e.expectedRow {
+				t.Errorf("row: got %d, want %d (error: %s)", row, e.expectedRow, derr.String())
+			}
+			if col != e.expectedCol {
+				t.Errorf("col: got %d, want %d (error: %s)", col, e.expectedCol, derr.String())
+			}
+			if !strings.Contains(derr.Error(), e.errContains) {
+				t.Errorf("error %q does not contain %q", derr.Error(), e.errContains)
+			}
+		})
+	}
+}
+
+func TestDecodeError_HumanStringAfterComments(t *testing.T) {
+	doc := "# comment\n= \"value\""
+	var v map[string]interface{}
+	err := Unmarshal([]byte(doc), &v)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+
+	var derr *DecodeError
+	if !errors.As(err, &derr) {
+		t.Fatalf("expected DecodeError, got %T: %v", err, err)
+	}
+
+	human := derr.String()
+	if !strings.Contains(human, "= \"value\"") {
+		t.Errorf("human-readable error should show the offending line, got:\n%s", human)
+	}
+	if !strings.Contains(human, "2|") {
+		t.Errorf("human-readable error should reference line 2, got:\n%s", human)
+	}
+}
+
 func TestStrictErrorUnwrap(t *testing.T) {
 	fo := bytes.NewBufferString(`
 Missing = 1
