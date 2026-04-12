@@ -3,6 +3,7 @@ package unstable
 import (
 	"bytes"
 	"fmt"
+	"reflect"
 	"unicode"
 
 	"github.com/pelletier/go-toml/v2/internal/characters"
@@ -69,8 +70,8 @@ func (p *Parser) Data() []byte {
 // panics.
 func (p *Parser) Range(b []byte) Range {
 	return Range{
-		Offset: uint32(p.subsliceOffset(b)), //nolint:gosec // TOML documents are small
-		Length: uint32(len(b)),              //nolint:gosec // TOML documents are small
+		Offset: uint32(subsliceOffset(p.data, b)), //nolint:gosec // TOML documents are small
+		Length: uint32(len(b)),                    //nolint:gosec // TOML documents are small
 	}
 }
 
@@ -82,11 +83,21 @@ func (p *Parser) rangeOfToken(token, rest []byte) Range {
 	return Range{Offset: uint32(offset), Length: uint32(len(token))} //nolint:gosec // TOML documents are small
 }
 
-// subsliceOffset returns the byte offset of subslice b within p.data.
-// b must be a suffix (tail) of p.data.
-func (p *Parser) subsliceOffset(b []byte) int {
-	// b is a suffix of p.data, so its offset is len(p.data) - len(b)
-	return len(p.data) - len(b)
+// subsliceOffset returns the byte offset of subslice b within data.
+// b must share the same backing array as data (any subslice of data).
+func subsliceOffset(data, b []byte) int {
+	if len(b) == 0 {
+		return 0
+	}
+
+	dataPtr := reflect.ValueOf(data).Pointer()
+	bPtr := reflect.ValueOf(b).Pointer()
+
+	offset := int(bPtr - dataPtr)
+	if offset < 0 || offset > len(data) {
+		panic("subslice is not within data")
+	}
+	return offset
 }
 
 // Raw returns the slice corresponding to the bytes in the given range.

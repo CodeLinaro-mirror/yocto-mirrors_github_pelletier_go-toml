@@ -202,6 +202,38 @@ func TestDecodeError_Accessors(t *testing.T) {
 	assert.Equal(t, "bar", e.String())
 }
 
+func TestDecodeError_InvalidKeyStartAfterComment(t *testing.T) {
+	// Regression for https://github.com/pelletier/go-toml/issues/1047: the "="
+	// that starts an invalid keyval must be reported on line 2, column 1, with
+	// the human-readable context pointing at that byte (not the document end).
+	doc := "# comment\n= \"value\""
+
+	var v map[string]any
+	err := Unmarshal([]byte(doc), &v)
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+
+	var derr *DecodeError
+	if !errors.As(err, &derr) {
+		t.Fatalf("expected *DecodeError, got %T", err)
+	}
+
+	row, col := derr.Position()
+	if row != 2 || col != 1 {
+		t.Errorf("Position(): got row %d col %d, want row 2 col 1", row, col)
+	}
+
+	human := derr.String()
+	if !strings.Contains(human, `2| = "value"`) {
+		t.Errorf("human output should show the error line; got:\n%s", human)
+	}
+	// Caret line uses line-number column width padding; only the "| ~" part is stable here.
+	if !strings.Contains(human, "| ~ invalid character at start of key") {
+		t.Errorf("human output should underline '=' and include the parser message; got:\n%s", human)
+	}
+}
+
 func TestDecodeError_DuplicateContent(t *testing.T) {
 	// This test verifies that when the same content appears multiple times
 	// in the document, the error correctly points to the actual location
