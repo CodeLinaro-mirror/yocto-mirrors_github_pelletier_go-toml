@@ -99,7 +99,7 @@ func (e *DecodeError) Key() Key {
 //
 //nolint:funlen
 func wrapDecodeError(document []byte, de *unstable.ParserError) *DecodeError {
-	offset := cap(document) - cap(de.Highlight)
+	offset := subsliceOffset(document, de.Highlight)
 
 	errMessage := de.Error()
 	errLine, errColumn := positionAtEnd(document[:offset])
@@ -260,4 +260,18 @@ func positionAtEnd(b []byte) (row int, column int) {
 	}
 
 	return row, column
+}
+
+// subsliceOffset finds the byte offset of subslice within data by
+// scanning for the matching element address.
+func subsliceOffset(data []byte, subslice []byte) int {
+	if len(subslice) == 0 {
+		return len(data)
+	}
+	for i := range data {
+		if &data[i] == &subslice[0] {
+			return i
+		}
+	}
+	panic("subslice is not within data")
 }

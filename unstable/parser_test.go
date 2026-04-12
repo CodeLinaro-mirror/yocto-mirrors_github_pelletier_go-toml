@@ -766,50 +766,6 @@ func TestErrorHighlightPositions(t *testing.T) {
 	}
 }
 
-func TestParserError_Offset(t *testing.T) {
-	examples := []struct {
-		desc       string
-		input      string
-		wantOffset int
-	}{
-		{
-			desc:       "error after comment",
-			input:      "# comment\n= \"value\"",
-			wantOffset: 10,
-		},
-		{
-			desc:       "error on first line",
-			input:      "= \"value\"",
-			wantOffset: 0,
-		},
-		{
-			desc:       "error after two lines",
-			input:      "a = 1\n= \"value\"",
-			wantOffset: 6,
-		},
-	}
-
-	for _, e := range examples {
-		t.Run(e.desc, func(t *testing.T) {
-			p := Parser{}
-			p.Reset([]byte(e.input))
-			for p.NextExpression() {
-			}
-			err := p.Error()
-			if err == nil {
-				t.Fatal("expected an error")
-			}
-			var perr *ParserError
-			if !errors.As(err, &perr) {
-				t.Fatalf("expected ParserError, got %T", err)
-			}
-			if perr.Offset != e.wantOffset {
-				t.Errorf("offset: got %d, want %d", perr.Offset, e.wantOffset)
-			}
-		})
-	}
-}
-
 func ExampleParser() {
 	doc := `
 	hello = "world"

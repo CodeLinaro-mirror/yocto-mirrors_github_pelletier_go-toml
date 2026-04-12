@@ -172,7 +172,6 @@ line 5`,
 			err := wrapDecodeError(doc, &unstable.ParserError{
 				Highlight: hl,
 				Message:   e.msg,
-				Offset:    start,
 			})
 
 			var derr *DecodeError

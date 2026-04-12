@@ -2,7 +2,6 @@ package unstable
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"unicode"
 
@@ -17,10 +16,6 @@ type ParserError struct {
 	Highlight []byte
 	Message   string
 	Key       []string // optional
-
-	// Offset is the byte offset of Highlight within the document.
-	// Set by the parser when the error is captured.
-	Offset int
 }
 
 // Error is the implementation of the error interface.
@@ -87,10 +82,18 @@ func (p *Parser) rangeOfToken(token, rest []byte) Range {
 	return Range{Offset: uint32(offset), Length: uint32(len(token))} //nolint:gosec // TOML documents are small
 }
 
-// subsliceOffset returns the byte offset of subslice b within p.data.
-// b must share the same backing array as p.data.
+// subsliceOffset finds the byte offset of subslice b within p.data
+// by scanning for the matching element address.
 func (p *Parser) subsliceOffset(b []byte) int {
-	return cap(p.data) - cap(b)
+	if len(b) == 0 {
+		return len(p.data)
+	}
+	for i := range p.data {
+		if &p.data[i] == &b[0] {
+			return i
+		}
+	}
+	panic("subslice is not within parser data")
 }
 
 // Raw returns the slice corresponding to the bytes in the given range.
@@ -131,19 +134,13 @@ func (p *Parser) NextExpression() bool {
 			p.left, p.err = p.parseNewline(p.left)
 		}
 
-		if p.err != nil {
-			p.setErrOffset()
-			return false
-		}
-
-		if len(p.left) == 0 {
+		if len(p.left) == 0 || p.err != nil {
 			return false
 		}
 
 		p.ref, p.left, p.err = p.parseExpression(p.left)
 
 		if p.err != nil {
-			p.setErrOffset()
 			return false
 		}
 
@@ -164,19 +161,6 @@ func (p *Parser) Expression() *Node {
 // Error returns any error that has occurred during parsing.
 func (p *Parser) Error() error {
 	return p.err
-}
-
-// setErrOffset sets the byte offset on the parser error from the
-// highlight's position within p.data.
-func (p *Parser) setErrOffset() {
-	if p.err == nil {
-		return
-	}
-	var perr *ParserError
-	if !errors.As(p.err, &perr) {
-		return
-	}
-	perr.Offset = p.subsliceOffset(perr.Highlight)
 }
 
 // Position describes a position in the input.
