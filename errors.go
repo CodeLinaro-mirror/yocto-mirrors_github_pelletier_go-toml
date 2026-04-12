@@ -100,7 +100,12 @@ func (e *DecodeError) Key() Key {
 //
 //nolint:funlen
 func wrapDecodeError(document []byte, de *unstable.ParserError) *DecodeError {
-	offset := subsliceOffset(document, de.Highlight)
+	var offset int
+	if o, ok := de.Offset(); ok {
+		offset = o
+	} else {
+		offset = subsliceOffset(document, de.Highlight)
+	}
 
 	errMessage := de.Error()
 	errLine, errColumn := positionAtEnd(document[:offset])

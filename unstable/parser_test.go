@@ -766,6 +766,54 @@ func TestErrorHighlightPositions(t *testing.T) {
 	}
 }
 
+func TestParserError_CachedOffset(t *testing.T) {
+	examples := []struct {
+		desc       string
+		input      string
+		wantOffset int
+	}{
+		{
+			desc:       "error after comment",
+			input:      "# comment\n= \"value\"",
+			wantOffset: 10,
+		},
+		{
+			desc:       "error on first line",
+			input:      "= \"value\"",
+			wantOffset: 0,
+		},
+		{
+			desc:       "error after two lines",
+			input:      "a = 1\n= \"value\"",
+			wantOffset: 6,
+		},
+	}
+
+	for _, e := range examples {
+		t.Run(e.desc, func(t *testing.T) {
+			p := Parser{}
+			p.Reset([]byte(e.input))
+			for p.NextExpression() {
+			}
+			err := p.Error()
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			var perr *ParserError
+			if !errors.As(err, &perr) {
+				t.Fatalf("expected ParserError, got %T", err)
+			}
+			offset, ok := perr.Offset()
+			if !ok {
+				t.Fatal("expected offset to be set")
+			}
+			if offset != e.wantOffset {
+				t.Errorf("cached offset: got %d, want %d", offset, e.wantOffset)
+			}
+		})
+	}
+}
+
 func ExampleParser() {
 	doc := `
 	hello = "world"

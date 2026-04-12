@@ -54,11 +54,14 @@ func (s *strict) MissingTable(node *unstable.Node) {
 		return
 	}
 
-	s.missing = append(s.missing, unstable.ParserError{
-		Highlight: s.keyLocation(node),
+	highlight, offset := s.keyLocation(node)
+	pe := unstable.ParserError{
+		Highlight: highlight,
 		Message:   "missing table",
 		Key:       s.key.Key(),
-	})
+	}
+	pe.SetOffset(offset)
+	s.missing = append(s.missing, pe)
 }
 
 func (s *strict) MissingField(node *unstable.Node) {
@@ -66,11 +69,14 @@ func (s *strict) MissingField(node *unstable.Node) {
 		return
 	}
 
-	s.missing = append(s.missing, unstable.ParserError{
-		Highlight: s.keyLocation(node),
+	highlight, offset := s.keyLocation(node)
+	pe := unstable.ParserError{
+		Highlight: highlight,
 		Message:   "missing field",
 		Key:       s.key.Key(),
-	})
+	}
+	pe.SetOffset(offset)
+	s.missing = append(s.missing, pe)
 }
 
 func (s *strict) Error(doc []byte) error {
@@ -90,7 +96,7 @@ func (s *strict) Error(doc []byte) error {
 	return err
 }
 
-func (s *strict) keyLocation(node *unstable.Node) []byte {
+func (s *strict) keyLocation(node *unstable.Node) ([]byte, int) {
 	k := node.Key()
 
 	hasOne := k.Next()
@@ -98,7 +104,6 @@ func (s *strict) keyLocation(node *unstable.Node) []byte {
 		panic("should not be called with empty key")
 	}
 
-	// Get the range from the first key to the last key.
 	firstRaw := k.Node().Raw
 	lastRaw := firstRaw
 
@@ -106,9 +111,8 @@ func (s *strict) keyLocation(node *unstable.Node) []byte {
 		lastRaw = k.Node().Raw
 	}
 
-	// Compute the slice from the document using the ranges.
 	start := firstRaw.Offset
 	end := lastRaw.Offset + lastRaw.Length
 
-	return s.doc[start:end]
+	return s.doc[start:end], int(start)
 }
