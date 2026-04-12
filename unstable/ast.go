@@ -90,18 +90,6 @@ type Range struct {
 	Length uint32
 }
 
-func subsliceOffset(data []byte, subslice []byte) int {
-	if len(subslice) == 0 {
-		return len(data)
-	}
-	for i := range data {
-		if &data[i] == &subslice[0] {
-			return i
-		}
-	}
-	panic("subslice is not within data")
-}
-
 // Next returns a pointer to the next node, or nil if there is no next node.
 func (n *Node) Next() *Node {
 	if n.next < 0 {

@@ -674,7 +674,7 @@ key3 = "value3"
 	assert.Equal(t, []string{"key1", "key2", "key3"}, keys)
 }
 
-func TestRangeOffsetAfterComment(t *testing.T) {
+func TestErrorOffsetAfterComment(t *testing.T) {
 	input := []byte("# comment\n= \"value\"")
 
 	p := Parser{}
@@ -689,12 +689,11 @@ func TestRangeOffsetAfterComment(t *testing.T) {
 	if !errors.As(err, &perr) {
 		t.Fatalf("expected ParserError, got %T", err)
 	}
-	r := p.Range(perr.Highlight)
-	shape := p.Shape(r)
 
-	if r.Offset != 10 {
-		t.Errorf("Range offset: got %d, want 10", r.Offset)
+	if perr.Offset != 10 {
+		t.Errorf("offset: got %d, want 10", perr.Offset)
 	}
+	shape := p.Shape(Range{Offset: uint32(perr.Offset), Length: uint32(len(perr.Highlight))})
 	if shape.Start.Line != 2 || shape.Start.Column != 1 {
 		t.Errorf("position: got %d:%d, want 2:1", shape.Start.Line, shape.Start.Column)
 	}
@@ -753,8 +752,7 @@ func TestErrorHighlightPositions(t *testing.T) {
 			if !errors.As(err, &perr) {
 				t.Fatalf("expected ParserError, got %T", err)
 			}
-			r := p.Range(perr.Highlight)
-			shape := p.Shape(r)
+			shape := p.Shape(Range{Offset: uint32(perr.Offset), Length: uint32(len(perr.Highlight))})
 
 			if shape.Start.Line != e.wantLine {
 				t.Errorf("line: got %d, want %d", shape.Start.Line, e.wantLine)

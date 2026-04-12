@@ -70,18 +70,6 @@ func (p *Parser) offsetOf(b []byte) int {
 	return len(p.data) - len(b)
 }
 
-// Range returns a range description that corresponds to a given slice of the
-// input. If the argument is not a subslice of the parser input, this function
-// panics.
-//
-// Prefer using ParserError.Offset directly for error position information.
-func (p *Parser) Range(b []byte) Range {
-	return Range{
-		Offset: uint32(subsliceOffset(p.data, b)), //nolint:gosec // TOML documents are small
-		Length: uint32(len(b)),                    //nolint:gosec // TOML documents are small
-	}
-}
-
 // rangeOfToken computes the Range of a token given the remaining bytes after the token.
 // This is used when the token was extracted from the beginning of some position,
 // and 'rest' is what remains after the token.
