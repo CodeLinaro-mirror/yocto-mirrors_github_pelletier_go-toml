@@ -2,7 +2,6 @@ package toml
 
 import (
 	"fmt"
-	"reflect"
 	"strconv"
 	"strings"
 
@@ -100,10 +99,8 @@ func (e *DecodeError) Key() Key {
 //
 //nolint:funlen
 func wrapDecodeError(document []byte, de *unstable.ParserError) *DecodeError {
-	var offset int
-	if o, ok := de.Offset(); ok {
-		offset = o
-	} else {
+	offset, ok := de.Offset()
+	if !ok {
 		offset = subsliceOffset(document, de.Highlight)
 	}
 
@@ -271,18 +268,5 @@ func positionAtEnd(b []byte) (row int, column int) {
 // subsliceOffset returns the byte offset of subslice within data.
 // subslice must share the same backing array as data.
 func subsliceOffset(data []byte, subslice []byte) int {
-	if len(subslice) == 0 {
-		return 0
-	}
-
-	// Use reflect to get the data pointers of both slices.
-	// This is safe because we're only reading the pointer values for comparison.
-	dataPtr := reflect.ValueOf(data).Pointer()
-	subPtr := reflect.ValueOf(subslice).Pointer()
-
-	offset := int(subPtr - dataPtr)
-	if offset < 0 || offset > len(data) {
-		panic("subslice is not within data")
-	}
-	return offset
+	return cap(data) - cap(subslice)
 }
