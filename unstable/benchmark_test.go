@@ -35,7 +35,7 @@ func BenchmarkScanComments(b *testing.B) {
 			b.ResetTimer()
 
 			for i := 0; i < b.N; i++ {
-				_, _, _ = scanComment(input)
+				_, _, _ = scanComment(input, 0)
 			}
 		})
 	}

@@ -32,7 +32,7 @@ func (d LocalDate) MarshalText() ([]byte, error) {
 
 // UnmarshalText parses b using RFC 3339 to fill d.
 func (d *LocalDate) UnmarshalText(b []byte) error {
-	res, err := parseLocalDate(b)
+	res, err := parseLocalDate(b, 0)
 	if err != nil {
 		return err
 	}
@@ -75,9 +75,9 @@ func (d LocalTime) MarshalText() ([]byte, error) {
 
 // UnmarshalText parses b using RFC 3339 to fill d.
 func (d *LocalTime) UnmarshalText(b []byte) error {
-	res, left, err := parseLocalTime(b)
+	res, left, err := parseLocalTime(b, 0)
 	if err == nil && len(left) != 0 {
-		err = unstable.NewParserError(left, "extra characters")
+		err = unstable.NewParserError(left, len(b)-len(left), "extra characters")
 	}
 	if err != nil {
 		return err
@@ -109,9 +109,9 @@ func (d LocalDateTime) MarshalText() ([]byte, error) {
 
 // UnmarshalText parses b using RFC 3339 to fill d.
 func (d *LocalDateTime) UnmarshalText(data []byte) error {
-	res, left, err := parseLocalDateTime(data)
+	res, left, err := parseLocalDateTime(data, 0)
 	if err == nil && len(left) != 0 {
-		err = unstable.NewParserError(left, "extra characters")
+		err = unstable.NewParserError(left, len(data)-len(left), "extra characters")
 	}
 	if err != nil {
 		return err

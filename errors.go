@@ -99,7 +99,7 @@ func (e *DecodeError) Key() Key {
 //
 //nolint:funlen
 func wrapDecodeError(document []byte, de *unstable.ParserError) *DecodeError {
-	offset := unstable.SubsliceOffset(document, de.Highlight)
+	offset := de.Offset
 
 	errMessage := de.Error()
 	errLine, errColumn := positionAtEnd(document[:offset])

@@ -24,61 +24,57 @@ import (
 // 0x9 => tab, ok
 // 0xA - 0x1F => invalid
 // 0x7F => invalid
-func Utf8TomlValidAlreadyEscaped(p []byte) []byte {
+func Utf8TomlValidAlreadyEscaped(p []byte) int {
+	consumed := 0
+
 	// Fast path. Check for and skip 8 bytes of ASCII characters per iteration.
 	for len(p) >= 8 {
-		// Combining two 32 bit loads allows the same code to be used
-		// for 32 and 64 bit platforms.
-		// The compiler can generate a 32bit load for first32 and second32
-		// on many platforms. See test/codegen/memcombine.go.
 		first32 := uint32(p[0]) | uint32(p[1])<<8 | uint32(p[2])<<16 | uint32(p[3])<<24
 		second32 := uint32(p[4]) | uint32(p[5])<<8 | uint32(p[6])<<16 | uint32(p[7])<<24
 		if (first32|second32)&0x80808080 != 0 {
-			// Found a non ASCII byte (>= RuneSelf).
 			break
 		}
 
 		for i, b := range p[:8] {
 			if InvalidASCII(b) {
-				return p[i : i+1]
+				return consumed + i
 			}
 		}
 
 		p = p[8:]
+		consumed += 8
 	}
 	n := len(p)
 	for i := 0; i < n; {
 		pi := p[i]
 		if pi < utf8.RuneSelf {
 			if InvalidASCII(pi) {
-				return p[i : i+1]
+				return consumed + i
 			}
 			i++
 			continue
 		}
 		x := first[pi]
 		if x == xx {
-			// Illegal starter byte.
-			return p[i : i+1]
+			return consumed + i
 		}
 		size := int(x & 7)
 		if i+size > n {
-			// Short or invalid.
-			return p[i:n]
+			return consumed + i
 		}
 		accept := acceptRanges[x>>4]
 		if c := p[i+1]; c < accept.lo || accept.hi < c {
-			return p[i : i+2]
+			return consumed + i
 		} else if size == 2 { //revive:disable:empty-block
 		} else if c := p[i+2]; c < locb || hicb < c {
-			return p[i : i+3]
+			return consumed + i
 		} else if size == 3 { //revive:disable:empty-block
 		} else if c := p[i+3]; c < locb || hicb < c {
-			return p[i : i+4]
+			return consumed + i
 		}
 		i += size
 	}
-	return nil
+	return -1
 }
 
 // Utf8ValidNext returns the size of the next rune if valid, 0 otherwise.

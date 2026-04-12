@@ -90,10 +90,7 @@ type Range struct {
 	Length uint32
 }
 
-// SubsliceOffset returns the byte offset of subslice within data.
-// Subslice must be a subslice of data, meaning it must point into the
-// same backing array. Panics if subslice is not within data.
-func SubsliceOffset(data []byte, subslice []byte) int {
+func subsliceOffset(data []byte, subslice []byte) int {
 	if len(subslice) == 0 {
 		return len(data)
 	}
