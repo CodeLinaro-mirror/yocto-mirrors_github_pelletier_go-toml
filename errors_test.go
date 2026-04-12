@@ -286,6 +286,27 @@ func TestDecodeError_Position(t *testing.T) {
 	}
 }
 
+func TestDecodeError_InvalidKeyStartAfterComment(t *testing.T) {
+	doc := "# comment\n= \"value\""
+
+	var out map[string]string
+	err := Unmarshal([]byte(doc), &out)
+	assert.Error(t, err)
+
+	var derr *DecodeError
+	if !errors.As(err, &derr) {
+		t.Fatal("error not in expected format")
+	}
+
+	row, col := derr.Position()
+	assert.Equal(t, 2, row)
+	assert.Equal(t, 1, col)
+	assert.Equal(t, "toml: invalid character at start of key: =", derr.Error())
+	assert.Equal(t, `1| # comment
+2| = "value"
+ | ~ invalid character at start of key: =`, derr.String())
+}
+
 func TestStrictErrorUnwrap(t *testing.T) {
 	fo := bytes.NewBufferString(`
 Missing = 1
