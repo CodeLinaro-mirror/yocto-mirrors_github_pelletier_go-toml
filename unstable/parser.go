@@ -18,28 +18,14 @@ type ParserError struct {
 	Message   string
 	Key       []string // optional
 
-	offset      int
-	offsetValid bool
+	// Offset is the byte offset of Highlight within the document.
+	// Set by the parser when the error is captured.
+	Offset int
 }
 
 // Error is the implementation of the error interface.
 func (e *ParserError) Error() string {
 	return e.Message
-}
-
-// SetOffset records the byte offset of the error highlight within the
-// document. Used by the parser to cache position information so
-// downstream consumers don't need to re-derive it from pointers.
-func (e *ParserError) SetOffset(offset int) {
-	e.offset = offset
-	e.offsetValid = true
-}
-
-// Offset returns the byte offset of the error highlight within the
-// document, if it was previously set by the parser. The boolean
-// indicates whether the offset is valid.
-func (e *ParserError) Offset() (int, bool) {
-	return e.offset, e.offsetValid
 }
 
 // NewParserError is a convenience function to create a ParserError
@@ -145,8 +131,12 @@ func (p *Parser) NextExpression() bool {
 			p.left, p.err = p.parseNewline(p.left)
 		}
 
-		if len(p.left) == 0 || p.err != nil {
+		if p.err != nil {
 			p.setErrOffset()
+			return false
+		}
+
+		if len(p.left) == 0 {
 			return false
 		}
 
@@ -176,9 +166,8 @@ func (p *Parser) Error() error {
 	return p.err
 }
 
-// setErrOffset computes and caches the byte offset of the error's
-// highlight within p.data, so downstream consumers can use it
-// without pointer arithmetic.
+// setErrOffset sets the byte offset on the parser error from the
+// highlight's position within p.data.
 func (p *Parser) setErrOffset() {
 	if p.err == nil {
 		return
@@ -187,10 +176,7 @@ func (p *Parser) setErrOffset() {
 	if !errors.As(p.err, &perr) {
 		return
 	}
-	if perr.offsetValid || len(perr.Highlight) == 0 {
-		return
-	}
-	perr.SetOffset(p.subsliceOffset(perr.Highlight))
+	perr.Offset = p.subsliceOffset(perr.Highlight)
 }
 
 // Position describes a position in the input.

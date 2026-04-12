@@ -55,13 +55,12 @@ func (s *strict) MissingTable(node *unstable.Node) {
 	}
 
 	highlight, offset := s.keyLocation(node)
-	pe := unstable.ParserError{
+	s.missing = append(s.missing, unstable.ParserError{
 		Highlight: highlight,
 		Message:   "missing table",
 		Key:       s.key.Key(),
-	}
-	pe.SetOffset(offset)
-	s.missing = append(s.missing, pe)
+		Offset:    offset,
+	})
 }
 
 func (s *strict) MissingField(node *unstable.Node) {
@@ -70,13 +69,12 @@ func (s *strict) MissingField(node *unstable.Node) {
 	}
 
 	highlight, offset := s.keyLocation(node)
-	pe := unstable.ParserError{
+	s.missing = append(s.missing, unstable.ParserError{
 		Highlight: highlight,
 		Message:   "missing field",
 		Key:       s.key.Key(),
-	}
-	pe.SetOffset(offset)
-	s.missing = append(s.missing, pe)
+		Offset:    offset,
+	})
 }
 
 func (s *strict) Error(doc []byte) error {

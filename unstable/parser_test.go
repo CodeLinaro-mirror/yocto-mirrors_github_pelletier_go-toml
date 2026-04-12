@@ -766,7 +766,7 @@ func TestErrorHighlightPositions(t *testing.T) {
 	}
 }
 
-func TestParserError_CachedOffset(t *testing.T) {
+func TestParserError_Offset(t *testing.T) {
 	examples := []struct {
 		desc       string
 		input      string
@@ -803,12 +803,8 @@ func TestParserError_CachedOffset(t *testing.T) {
 			if !errors.As(err, &perr) {
 				t.Fatalf("expected ParserError, got %T", err)
 			}
-			offset, ok := perr.Offset()
-			if !ok {
-				t.Fatal("expected offset to be set")
-			}
-			if offset != e.wantOffset {
-				t.Errorf("cached offset: got %d, want %d", offset, e.wantOffset)
+			if perr.Offset != e.wantOffset {
+				t.Errorf("offset: got %d, want %d", perr.Offset, e.wantOffset)
 			}
 		})
 	}

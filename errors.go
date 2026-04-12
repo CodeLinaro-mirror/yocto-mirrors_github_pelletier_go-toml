@@ -99,10 +99,7 @@ func (e *DecodeError) Key() Key {
 //
 //nolint:funlen
 func wrapDecodeError(document []byte, de *unstable.ParserError) *DecodeError {
-	offset, ok := de.Offset()
-	if !ok {
-		offset = subsliceOffset(document, de.Highlight)
-	}
+	offset := cap(document) - cap(de.Highlight)
 
 	errMessage := de.Error()
 	errLine, errColumn := positionAtEnd(document[:offset])
@@ -263,10 +260,4 @@ func positionAtEnd(b []byte) (row int, column int) {
 	}
 
 	return row, column
-}
-
-// subsliceOffset returns the byte offset of subslice within data.
-// subslice must share the same backing array as data.
-func subsliceOffset(data []byte, subslice []byte) int {
-	return cap(data) - cap(subslice)
 }
